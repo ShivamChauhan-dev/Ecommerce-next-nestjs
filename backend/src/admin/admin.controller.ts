@@ -60,6 +60,11 @@ export class AdminController {
         return this.adminService.getLowStockProducts();
     }
 
+    @Get('products/:id')
+    async getProductById(@Param('id') id: string) {
+        return this.adminService.getProductById(id);
+    }
+
     @Post('products')
     async createProduct(@Body() dto: CreateProductDto) {
         return this.adminService.createProduct(dto);

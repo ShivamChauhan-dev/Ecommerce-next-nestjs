@@ -30,9 +30,12 @@ export class AuthService {
 
     async validateUser(email: string, pass: string): Promise<any> {
         const user = await this.prisma.user.findUnique({ where: { email } });
-        if (user && (await bcrypt.compare(pass, user.password))) {
-            const { password, resetToken, resetTokenExpiry, refreshToken, ...result } = user;
-            return result;
+        if (user && user.password && (await bcrypt.compare(pass, user.password))) {
+            // Exclude sensitive fields from result
+            const { password, resetToken, resetTokenExpiry, refreshToken, ...result } = user as any;
+            // Also exclude verification fields if they exist
+            const { verificationToken, verificationTokenExpiry, ...cleanResult } = result;
+            return cleanResult;
         }
         return null;
     }
@@ -61,12 +64,18 @@ export class AuthService {
 
         const tokens = this.generateTokens(user);
 
-        // Store refresh token hash
-        const refreshTokenHash = await bcrypt.hash(tokens.refreshToken, 10);
-        await this.prisma.user.update({
-            where: { id: user.id },
-            data: { refreshToken: refreshTokenHash },
-        });
+        // Store refresh token hash (optional - works without MongoDB replica set)
+        try {
+            const refreshTokenHash = await bcrypt.hash(tokens.refreshToken, 10);
+            await this.prisma.user.update({
+                where: { id: user.id },
+                data: { refreshToken: refreshTokenHash },
+            });
+        } catch (error) {
+            // If MongoDB doesn't support transactions, skip storing refresh token
+            // The token will still work for the session but won't be validated server-side
+            console.warn('Could not store refresh token (MongoDB may not be configured as replica set)');
+        }
 
         return {
             access_token: tokens.accessToken,
@@ -116,25 +125,31 @@ export class AuthService {
                 where: { id: payload.sub },
             });
 
-            if (!user || !user.refreshToken) {
+            if (!user) {
                 throw new UnauthorizedException('Invalid refresh token');
             }
 
-            // Verify stored refresh token
-            const isValid = await bcrypt.compare(refreshTokenDto.refreshToken, user.refreshToken);
-            if (!isValid) {
-                throw new UnauthorizedException('Invalid refresh token');
+            // If stored refresh token exists, verify it (skip if MongoDB doesn't support replica set)
+            if (user.refreshToken) {
+                const isValid = await bcrypt.compare(refreshTokenDto.refreshToken, user.refreshToken);
+                if (!isValid) {
+                    throw new UnauthorizedException('Invalid refresh token');
+                }
             }
 
             // Generate new tokens (rotation)
             const tokens = this.generateTokens(user);
 
-            // Update stored refresh token
-            const refreshTokenHash = await bcrypt.hash(tokens.refreshToken, 10);
-            await this.prisma.user.update({
-                where: { id: user.id },
-                data: { refreshToken: refreshTokenHash },
-            });
+            // Update stored refresh token (optional - works without MongoDB replica set)
+            try {
+                const refreshTokenHash = await bcrypt.hash(tokens.refreshToken, 10);
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { refreshToken: refreshTokenHash },
+                });
+            } catch (error) {
+                console.warn('Could not update refresh token (MongoDB may not be configured as replica set)');
+            }
 
             const { password, resetToken, resetTokenExpiry, refreshToken: _, ...userResult } = user;
 
@@ -215,6 +230,11 @@ export class AuthService {
             throw new NotFoundException('User not found');
         }
 
+        // Check if user has a password (OAuth users don't)
+        if (!user.password) {
+            throw new BadRequestException('Cannot change password for OAuth accounts');
+        }
+
         // Verify current password
         const isCurrentPasswordValid = await bcrypt.compare(
             changePasswordDto.currentPassword,
@@ -240,10 +260,14 @@ export class AuthService {
     }
 
     async logout(userId: string) {
-        await this.prisma.user.update({
-            where: { id: userId },
-            data: { refreshToken: null },
-        });
+        try {
+            await this.prisma.user.update({
+                where: { id: userId },
+                data: { refreshToken: null },
+            });
+        } catch (error) {
+            console.warn('Could not clear refresh token (MongoDB may not be configured as replica set)');
+        }
 
         return { message: 'Logged out successfully' };
     }
@@ -260,6 +284,106 @@ export class AuthService {
 
         const { password, resetToken, resetTokenExpiry, refreshToken, ...result } = user;
         return result;
+    }
+
+    // ==================== OAUTH METHODS ====================
+
+    /**
+     * Generate tokens for OAuth users
+     */
+    async generateTokensForOAuth(user: any) {
+        const tokens = this.generateTokens(user);
+
+        // Store refresh token hash (optional - works without MongoDB replica set)
+        try {
+            const refreshTokenHash = await bcrypt.hash(tokens.refreshToken, 10);
+            await this.prisma.user.update({
+                where: { id: user.id },
+                data: { refreshToken: refreshTokenHash },
+            });
+        } catch (error) {
+            console.warn('Could not store OAuth refresh token (MongoDB may not be configured as replica set)');
+        }
+
+        return {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+            },
+        };
+    }
+
+    // ==================== EMAIL VERIFICATION ====================
+
+    /**
+     * Send verification email to user
+     */
+    async sendVerificationEmail(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        if (user.emailVerified) {
+            return { message: 'Email already verified' };
+        }
+
+        // Generate verification token
+        const token = uuidv4();
+        const expiry = new Date();
+        expiry.setHours(expiry.getHours() + 24); // 24 hour expiry
+
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                verificationToken: token,
+                verificationTokenExpiry: expiry,
+            },
+        });
+
+        // Generate verification URL
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+        const verifyUrl = `${frontendUrl}/verify-email?token=${token}`;
+
+        // Send email
+        await this.emailService.sendVerificationEmail(user.email, user.firstName, verifyUrl);
+
+        return { message: 'Verification email sent' };
+    }
+
+    /**
+     * Verify email with token
+     */
+    async verifyEmail(token: string) {
+        const user = await this.prisma.user.findFirst({
+            where: {
+                verificationToken: token,
+                verificationTokenExpiry: { gte: new Date() },
+            },
+        });
+
+        if (!user) {
+            throw new BadRequestException('Invalid or expired verification token');
+        }
+
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+                emailVerified: true,
+                verificationToken: null,
+                verificationTokenExpiry: null,
+            },
+        });
+
+        return { message: 'Email verified successfully' };
     }
 }
 

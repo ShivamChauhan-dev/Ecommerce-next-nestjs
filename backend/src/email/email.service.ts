@@ -3,78 +3,78 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
 interface EmailOptions {
-    to: string;
-    subject: string;
-    html: string;
-    text?: string;
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
 }
 
 interface OrderEmailData {
-    orderNumber: string;
-    customerName: string;
-    items: Array<{
-        name: string;
-        quantity: number;
-        price: number;
-    }>;
-    subtotal: number;
-    discount: number;
-    shippingCost: number;
-    total: number;
+  orderNumber: string;
+  customerName: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+  subtotal: number;
+  discount: number;
+  shippingCost: number;
+  total: number;
 }
 
 @Injectable()
 export class EmailService {
-    private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter;
 
-    constructor(private configService: ConfigService) {
-        this.transporter = nodemailer.createTransport({
-            host: this.configService.get<string>('SMTP_HOST') || 'smtp.gmail.com',
-            port: parseInt(this.configService.get<string>('SMTP_PORT') || '587'),
-            secure: false, // true for 465, false for other ports
-            auth: {
-                user: this.configService.get<string>('SMTP_USER'),
-                pass: this.configService.get<string>('SMTP_PASS'),
-            },
-        });
+  constructor(private configService: ConfigService) {
+    this.transporter = nodemailer.createTransport({
+      host: this.configService.get<string>('SMTP_HOST') || 'smtp.gmail.com',
+      port: parseInt(this.configService.get<string>('SMTP_PORT') || '587'),
+      secure: false, // true for 465, false for other ports
+      auth: {
+        user: this.configService.get<string>('SMTP_USER'),
+        pass: this.configService.get<string>('SMTP_PASS'),
+      },
+    });
+  }
+
+  private async sendEmail(options: EmailOptions) {
+    const from = this.configService.get<string>('SMTP_FROM') || 'Anvogue <noreply@anvogue.com>';
+
+    try {
+      const info = await this.transporter.sendMail({
+        from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      });
+      console.log('Email sent:', info.messageId);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error('Email send failed:', error);
+      return { success: false, error };
     }
+  }
 
-    private async sendEmail(options: EmailOptions) {
-        const from = this.configService.get<string>('SMTP_FROM') || 'Anvogue <noreply@anvogue.com>';
-
-        try {
-            const info = await this.transporter.sendMail({
-                from,
-                to: options.to,
-                subject: options.subject,
-                html: options.html,
-                text: options.text,
-            });
-            console.log('Email sent:', info.messageId);
-            return { success: true, messageId: info.messageId };
-        } catch (error) {
-            console.error('Email send failed:', error);
-            return { success: false, error };
-        }
-    }
-
-    /**
-     * Send order confirmation email
-     */
-    async sendOrderConfirmation(email: string, data: OrderEmailData) {
-        const itemsHtml = data.items
-            .map(
-                (item) => `
+  /**
+   * Send order confirmation email
+   */
+  async sendOrderConfirmation(email: string, data: OrderEmailData) {
+    const itemsHtml = data.items
+      .map(
+        (item) => `
         <tr>
           <td style="padding: 12px; border-bottom: 1px solid #eee;">${item.name}</td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">₹${item.price.toFixed(2)}</td>
         </tr>
       `,
-            )
-            .join('');
+      )
+      .join('');
 
-        const html = `
+    const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -145,21 +145,21 @@ export class EmailService {
     </html>
     `;
 
-        return this.sendEmail({
-            to: email,
-            subject: `Order Confirmed - ${data.orderNumber}`,
-            html,
-        });
-    }
+    return this.sendEmail({
+      to: email,
+      subject: `Order Confirmed - ${data.orderNumber}`,
+      html,
+    });
+  }
 
-    /**
-     * Send password reset email
-     */
-    async sendPasswordReset(email: string, resetToken: string, userName: string) {
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+  /**
+   * Send password reset email
+   */
+  async sendPasswordReset(email: string, resetToken: string, userName: string) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-        const html = `
+    const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -197,20 +197,20 @@ export class EmailService {
     </html>
     `;
 
-        return this.sendEmail({
-            to: email,
-            subject: 'Reset Your Password - Anvogue',
-            html,
-        });
-    }
+    return this.sendEmail({
+      to: email,
+      subject: 'Reset Your Password - Anvogue',
+      html,
+    });
+  }
 
-    /**
-     * Send welcome email
-     */
-    async sendWelcome(email: string, userName: string) {
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+  /**
+   * Send welcome email
+   */
+  async sendWelcome(email: string, userName: string) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
 
-        const html = `
+    const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -245,43 +245,43 @@ export class EmailService {
     </html>
     `;
 
-        return this.sendEmail({
-            to: email,
-            subject: 'Welcome to Anvogue! 🎉',
-            html,
-        });
-    }
+    return this.sendEmail({
+      to: email,
+      subject: 'Welcome to Anvogue! 🎉',
+      html,
+    });
+  }
 
-    /**
-     * Send order status update email
-     */
-    async sendOrderStatusUpdate(email: string, orderNumber: string, status: string, trackingNumber?: string) {
-        const statusMessages: Record<string, { title: string; message: string }> = {
-            confirmed: {
-                title: 'Order Confirmed ✅',
-                message: 'Your order has been confirmed and is being processed.',
-            },
-            processing: {
-                title: 'Order Processing 📦',
-                message: 'Your order is being prepared for shipping.',
-            },
-            shipped: {
-                title: 'Order Shipped 🚚',
-                message: 'Your order has been shipped and is on its way!',
-            },
-            delivered: {
-                title: 'Order Delivered 🎉',
-                message: 'Your order has been delivered. Enjoy your purchase!',
-            },
-            cancelled: {
-                title: 'Order Cancelled ❌',
-                message: 'Your order has been cancelled. If you have any questions, please contact support.',
-            },
-        };
+  /**
+   * Send order status update email
+   */
+  async sendOrderStatusUpdate(email: string, orderNumber: string, status: string, trackingNumber?: string) {
+    const statusMessages: Record<string, { title: string; message: string }> = {
+      confirmed: {
+        title: 'Order Confirmed ✅',
+        message: 'Your order has been confirmed and is being processed.',
+      },
+      processing: {
+        title: 'Order Processing 📦',
+        message: 'Your order is being prepared for shipping.',
+      },
+      shipped: {
+        title: 'Order Shipped 🚚',
+        message: 'Your order has been shipped and is on its way!',
+      },
+      delivered: {
+        title: 'Order Delivered 🎉',
+        message: 'Your order has been delivered. Enjoy your purchase!',
+      },
+      cancelled: {
+        title: 'Order Cancelled ❌',
+        message: 'Your order has been cancelled. If you have any questions, please contact support.',
+      },
+    };
 
-        const statusInfo = statusMessages[status] || { title: 'Order Update', message: `Your order status: ${status}` };
+    const statusInfo = statusMessages[status] || { title: 'Order Update', message: `Your order status: ${status}` };
 
-        const html = `
+    const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -322,10 +322,60 @@ export class EmailService {
     </html>
     `;
 
-        return this.sendEmail({
-            to: email,
-            subject: `${statusInfo.title} - ${orderNumber}`,
-            html,
-        });
-    }
+    return this.sendEmail({
+      to: email,
+      subject: `${statusInfo.title} - ${orderNumber}`,
+      html,
+    });
+  }
+
+  /**
+   * Send email verification
+   */
+  async sendVerificationEmail(email: string, userName: string, verifyUrl: string) {
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5;">
+      <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Verify Your Email 📧</h1>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Hi ${userName},</p>
+          <p style="font-size: 16px; color: #666;">Please verify your email address by clicking the button below:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${verifyUrl}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">Verify Email</a>
+          </div>
+          
+          <p style="font-size: 14px; color: #999;">This link will expire in 24 hours.</p>
+          <p style="font-size: 14px; color: #999;">If you didn't create an account, you can safely ignore this email.</p>
+          
+          <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <p style="margin: 0; font-size: 12px; color: #666;">If the button doesn't work, copy and paste this link:</p>
+            <p style="margin: 5px 0 0; font-size: 12px; color: #667eea; word-break: break-all;">${verifyUrl}</p>
+          </div>
+        </div>
+        
+        <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+          © ${new Date().getFullYear()} Anvogue. All rights reserved.
+        </p>
+      </div>
+    </body>
+    </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: 'Verify Your Email - Anvogue',
+      html,
+    });
+  }
 }
+

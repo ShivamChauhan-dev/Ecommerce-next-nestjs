@@ -50,9 +50,16 @@ export class AdminService {
             data: {
                 ...productData,
                 quantity: dto.stock || 0, // Sync quantity with stock
-                variations: variations
+                variations: variations && variations.length > 0
                     ? {
-                        create: variations,
+                        create: variations.map((v: any) => ({
+                            type: v.type || 'color',
+                            name: v.name || '',
+                            value: v.value || '',
+                            image: v.image || null,
+                            priceAdjustment: v.priceAdjustment || 0,
+                            stockQuantity: v.stockQuantity || 0,
+                        })),
                     }
                     : undefined,
             },
@@ -95,11 +102,52 @@ export class AdminService {
             }
         }
 
+        // Extract only valid fields for update (exclude id, createdAt, updatedAt, relations as strings)
+        const {
+            id: _id,
+            createdAt,
+            updatedAt,
+            category,
+            brand,
+            variations,
+            reviews,
+            wishlists,
+            compareLists,
+            status,
+            ...validData
+        } = dto as any;
+
+        // Handle variations update - delete existing and create new ones
+        if (variations && Array.isArray(variations)) {
+            // Delete existing variations
+            await this.prisma.productVariation.deleteMany({
+                where: { productId: id },
+            });
+
+            // Create new variations if any provided
+            if (variations.length > 0) {
+                await this.prisma.productVariation.createMany({
+                    data: variations.map((v: any) => ({
+                        productId: id,
+                        type: v.type || 'color',
+                        name: v.name || '',
+                        value: v.value || '',
+                        image: v.image || null,
+                        priceAdjustment: v.priceAdjustment || 0,
+                        stockQuantity: v.stockQuantity || 0,
+                    })),
+                });
+            }
+        }
+
         return this.prisma.product.update({
             where: { id },
             data: {
-                ...dto,
-                quantity: dto.stock !== undefined ? dto.stock : undefined,
+                ...validData,
+                // Filter out empty strings for ObjectId fields
+                categoryId: validData.categoryId && validData.categoryId.length > 0 ? validData.categoryId : undefined,
+                brandId: validData.brandId && validData.brandId.length > 0 ? validData.brandId : undefined,
+                quantity: validData.stock !== undefined ? validData.stock : undefined,
             },
             include: {
                 variations: true,
@@ -194,6 +242,23 @@ export class AdminService {
             },
             orderBy: { stock: 'asc' },
         });
+    }
+
+    async getProductById(id: string) {
+        const product = await this.prisma.product.findUnique({
+            where: { id },
+            include: {
+                category: true,
+                brand: true,
+                variations: true,
+            },
+        });
+
+        if (!product) {
+            throw new NotFoundException('Product not found');
+        }
+
+        return product;
     }
 
     async updateStock(id: string, quantity: number) {

@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy, JwtAuthGuard } from './jwt.strategy';
+import { GoogleStrategy } from './google.strategy';
 import { PrismaService } from '../prisma.service';
 import { EmailModule } from '../email/email.module';
 
@@ -23,7 +24,8 @@ import { EmailModule } from '../email/email.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, PrismaService],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, JwtAuthGuard, PrismaService],
   exports: [JwtAuthGuard],
 })
 export class AuthModule { }
+

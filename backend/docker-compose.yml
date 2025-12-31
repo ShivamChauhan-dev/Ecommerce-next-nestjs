@@ -10,11 +10,38 @@ services:
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "rs.initiate()"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 5s
+      start_period: 30s
+    restart: unless-stopped
+
+  mongo-init:
+    image: mongo:6
+    depends_on:
+      - mongo
+    volumes:
+      - .:/app
+    command: >
+      sh -c "
+        sleep 20 &&
+        mongosh mongodb://mongo:27017/admin --eval \"
+          try {
+            rs.initiate({
+              _id: 'rs0',
+              members: [
+                { _id: 0, host: 'mongo:27017' }
+              ]
+            });
+            print('Replica set initiated');
+          } catch (e) {
+            print('Replica set initiation failed or already exists:', e.message);
+          }
+        \" &&
+        sleep 10
+      "
+    restart: "no"
 
 volumes:
   mongo_data:

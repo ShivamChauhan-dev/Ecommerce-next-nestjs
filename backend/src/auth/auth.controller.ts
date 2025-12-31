@@ -3,11 +3,14 @@ import {
     Controller,
     Post,
     Get,
+    Param,
     HttpCode,
     HttpStatus,
     UseGuards,
     Req,
+    Res,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import {
     LoginDto,
@@ -74,4 +77,55 @@ export class AuthController {
         const userId = req.user.sub || req.user.id;
         return this.authService.getProfile(userId);
     }
+
+    // ==================== GOOGLE OAUTH ====================
+
+    /**
+     * Initiate Google OAuth login
+     * GET /auth/google
+     */
+    @Get('google')
+    @UseGuards(AuthGuard('google'))
+    async googleAuth() {
+        // Passport handles the redirect
+    }
+
+    /**
+     * Google OAuth callback
+     * GET /auth/google/callback
+     */
+    @Get('google/callback')
+    @UseGuards(AuthGuard('google'))
+    async googleAuthCallback(@Req() req: any, @Res() res: any) {
+        // User is in req.user after successful Google auth
+        const tokens = await this.authService.generateTokensForOAuth(req.user);
+
+        // Redirect to frontend with tokens (or return JSON)
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+        res.redirect(`${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`);
+    }
+
+    // ==================== EMAIL VERIFICATION ====================
+
+    /**
+     * Send verification email
+     * POST /auth/send-verification
+     */
+    @Post('send-verification')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async sendVerificationEmail(@Req() req: any) {
+        const userId = req.user.sub || req.user.id;
+        return this.authService.sendVerificationEmail(userId);
+    }
+
+    /**
+     * Verify email with token
+     * GET /auth/verify-email/:token
+     */
+    @Get('verify-email/:token')
+    async verifyEmail(@Param('token') token: string) {
+        return this.authService.verifyEmail(token);
+    }
 }
+

@@ -8,20 +8,27 @@ datasource db {
 }
 
 model User {
-  id               String    @id @default(auto()) @map("_id") @db.ObjectId
-  email            String    @unique
-  password         String
-  firstName        String
-  lastName         String
-  role             Role      @default(USER)
-  avatar           String?
-  phone            String?
-  emailVerified    Boolean   @default(false)
-  refreshToken     String?
-  resetToken       String?
-  resetTokenExpiry DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  email                    String    @unique
+  password                 String?   // Optional for OAuth users
+  firstName                String
+  lastName                 String
+  role                     Role      @default(USER)
+  avatar                   String?
+  phone                    String?
+  emailVerified            Boolean   @default(false)
+  verificationToken        String?
+  verificationTokenExpiry  DateTime?
+  refreshToken             String?
+  resetToken               String?
+  resetTokenExpiry         DateTime?
+  
+  // OAuth fields
+  googleId                 String?   @unique
+  authProvider             String    @default("local") // local, google
+  
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
   
   address   Address?
   cart      Cart?
@@ -71,7 +78,6 @@ model Product {
   isActive       Boolean   @default(true)
   
   images      String[]
-  sizes       String[]
   
   brandId     String?   @db.ObjectId
   brand       Brand?    @relation(fields: [brandId], references: [id])
@@ -95,10 +101,12 @@ model Product {
 
 model ProductVariation {
   id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  color       String
-  colorCode   String
-  colorImage  String?
+  type        String? @default("color")  // "color", "size", "custom"
+  name        String? @default("")       // e.g. "Red", "XL", "Material"
+  value       String? @default("")       // e.g. "#FF0000", "XL", "Cotton"
   image       String?
+  priceAdjustment Float? @default(0)
+  stockQuantity   Int?   @default(0)
   
   productId   String  @db.ObjectId
   product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -123,16 +131,32 @@ model Brand {
 }
 
 model Review {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  rating       Int
+  title        String?
+  comment      String
+  isVerified   Boolean       @default(false) // Verified purchase
+  isApproved   Boolean       @default(true)  // Admin moderation
+  helpfulCount Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  userId       String        @db.ObjectId
+  user         User          @relation(fields: [userId], references: [id])
+  
+  productId    String        @db.ObjectId
+  product      Product       @relation(fields: [productId], references: [id])
+  
+  media        ReviewMedia[]
+}
+
+model ReviewMedia {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  rating    Int
-  comment   String
-  createdAt DateTime @default(now())
+  url       String
+  type      String   // image, video
   
-  userId    String   @db.ObjectId
-  user      User     @relation(fields: [userId], references: [id])
-  
-  productId String   @db.ObjectId
-  product   Product  @relation(fields: [productId], references: [id])
+  reviewId  String   @db.ObjectId
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 }
 
 // --- CMS CONTENT ---
@@ -245,6 +269,19 @@ model Order {
   updatedAt     DateTime @updatedAt
   
   payment       Payment?
+  events        OrderEvent[]
+}
+
+model OrderEvent {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  status    String   // pending, confirmed, processing, packed, shipped, out_for_delivery, delivered, cancelled
+  note      String?
+  location  String?
+  
+  orderId   String   @db.ObjectId
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
 }
 
 // --- COUPONS ---
@@ -318,4 +355,55 @@ model ShippingZone {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// --- PHASE 4: NOTIFICATIONS ---
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  type      String   // order_update, promo, review, system
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+}
+
+// --- TAX RATES ---
+
+model TaxRate {
+  id     String  @id @default(auto()) @map("_id") @db.ObjectId
+  name   String  // GST, VAT, etc.
+  rate   Float   // Percentage: 18.0 for 18%
+  region String? // State or country code
+  isActive Boolean @default(true)
+}
+
+// --- RECENTLY VIEWED ---
+
+model RecentlyViewed {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  productId String   @db.ObjectId
+  viewedAt  DateTime @default(now())
+  
+  @@unique([userId, productId])
+}
+
+// --- STORE SETTINGS ---
+
+model StoreSettings {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  storeName     String   @default("Anvogue")
+  logo          String?  // Base64 or URL
+  currencyCode  String   @default("USD")
+  currencySymbol String  @default("$")
+  currencyName  String   @default("US Dollar")
+  currencyLocale String  @default("en-US")
+  timezoneValue String   @default("Asia/Kolkata")
+  timezoneLabel String   @default("India Standard Time")
+  timezoneOffset String  @default("UTC+5:30")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

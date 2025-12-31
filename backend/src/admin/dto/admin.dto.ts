@@ -71,10 +71,7 @@ export class CreateProductDto {
     @IsOptional()
     images?: string[] = [];
 
-    @IsArray()
-    @IsString({ each: true })
-    @IsOptional()
-    sizes?: string[] = [];
+
 
     @IsString()
     @IsOptional()
@@ -91,18 +88,28 @@ export class CreateProductDto {
 
 export class CreateProductVariationDto {
     @IsString()
-    color: string;
-
-    @IsString()
-    colorCode: string;
+    @IsOptional()
+    type?: string;
 
     @IsString()
     @IsOptional()
-    colorImage?: string;
+    name?: string;
+
+    @IsString()
+    @IsOptional()
+    value?: string;
 
     @IsString()
     @IsOptional()
     image?: string;
+
+    @IsNumber()
+    @IsOptional()
+    priceAdjustment?: number;
+
+    @IsNumber()
+    @IsOptional()
+    stockQuantity?: number;
 }
 
 export class UpdateProductDto {
@@ -171,10 +178,7 @@ export class UpdateProductDto {
     @IsOptional()
     images?: string[];
 
-    @IsArray()
-    @IsString({ each: true })
-    @IsOptional()
-    sizes?: string[];
+
 
     @IsString()
     @IsOptional()

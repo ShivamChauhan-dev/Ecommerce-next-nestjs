@@ -181,6 +181,32 @@ async function main() {
             await testimonialsCollection.insertMany(testimonialDocs);
         }
 
+        // Create admin user
+        const usersCollection = db.collection('User');
+        const existingAdmin = await usersCollection.findOne({ email: 'admin@anvogue.com' });
+
+        if (!existingAdmin) {
+            // Hash the password using bcrypt
+            const bcrypt = require('bcrypt');
+            const hashedPassword = await bcrypt.hash('admin123', 10);
+
+            await usersCollection.insertOne({
+                email: 'admin@anvogue.com',
+                password: hashedPassword,
+                firstName: 'Admin',
+                lastName: 'Anvogue',
+                role: 'ADMIN',
+                emailVerified: true,
+                authProvider: 'local',
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+
+            console.log('Admin user created: admin@anvogue.com');
+        } else {
+            console.log('Admin user already exists: admin@anvogue.com');
+        }
+
         console.log('Native seeding completed successfully.');
     } catch (e) {
         console.error(e);

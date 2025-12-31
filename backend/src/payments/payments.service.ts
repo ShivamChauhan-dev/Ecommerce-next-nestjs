@@ -18,18 +18,25 @@ interface RazorpayOrder {
 
 @Injectable()
 export class PaymentsService {
-    private razorpay: any;
+    private razorpay: any = null;
 
     constructor(
         private prisma: PrismaService,
         private configService: ConfigService,
     ) {
-        // Dynamic import for Razorpay (CommonJS module)
-        const Razorpay = require('razorpay');
-        this.razorpay = new Razorpay({
-            key_id: this.configService.get<string>('RAZORPAY_KEY_ID'),
-            key_secret: this.configService.get<string>('RAZORPAY_KEY_SECRET'),
-        });
+        // Only initialize Razorpay if credentials are provided
+        const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
+        const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
+
+        if (keyId && keySecret) {
+            const Razorpay = require('razorpay');
+            this.razorpay = new Razorpay({
+                key_id: keyId,
+                key_secret: keySecret,
+            });
+        } else {
+            console.warn('⚠️ Razorpay credentials not configured. Payment features will be disabled.');
+        }
     }
 
     /**
@@ -42,6 +49,11 @@ export class PaymentsService {
         key: string;
     }> {
         try {
+            // Check if Razorpay is configured
+            if (!this.razorpay) {
+                throw new BadRequestException('Payment gateway not configured. Please contact support.');
+            }
+
             // Verify order exists
             const order = await this.prisma.order.findUnique({
                 where: { id: dto.orderId },
