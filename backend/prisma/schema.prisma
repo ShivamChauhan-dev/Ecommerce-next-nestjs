@@ -1,0 +1,321 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  email            String    @unique
+  password         String
+  firstName        String
+  lastName         String
+  role             Role      @default(USER)
+  avatar           String?
+  phone            String?
+  emailVerified    Boolean   @default(false)
+  refreshToken     String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  address   Address?
+  cart      Cart?
+  wishlist  Wishlist?
+  compare   CompareList?
+  orders    Order[]
+  reviews   Review[]
+}
+
+model Address {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  street  String
+  city    String
+  state   String
+  zip     String
+  country String
+  
+  userId  String @unique @db.ObjectId
+  user    User   @relation(fields: [userId], references: [id])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// --- PRODUCT CATALOG ---
+
+model Product {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  slug           String    @unique
+  sku            String?
+  price          Float
+  originPrice    Float?
+  rating         Float     @default(0)
+  sold           Int       @default(0)
+  quantity       Int       @default(0)
+  stock          Int       @default(0)
+  lowStockAlert  Int       @default(5)
+  trackInventory Boolean   @default(true)
+  description    String
+  type           String?
+  gender         String?
+  isNew          Boolean   @default(false)
+  isSale         Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  
+  images      String[]
+  sizes       String[]
+  
+  brandId     String?   @db.ObjectId
+  brand       Brand?    @relation(fields: [brandId], references: [id])
+  
+  categoryId  String?   @db.ObjectId
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  variations  ProductVariation[]
+  reviews     Review[]
+  
+  // Relations for lists
+  wishlistIDs String[] @db.ObjectId
+  wishlists   Wishlist[] @relation(fields: [wishlistIDs], references: [id])
+  
+  compareListIDs String[] @db.ObjectId
+  compareLists   CompareList[] @relation(fields: [compareListIDs], references: [id])
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ProductVariation {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  color       String
+  colorCode   String
+  colorImage  String?
+  image       String?
+  
+  productId   String  @db.ObjectId
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  name  String
+  slug  String @unique
+  image String?
+  
+  products Product[]
+}
+
+model Brand {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  name  String
+  slug  String @unique
+  image String?
+  
+  products Product[]
+}
+
+model Review {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  
+  productId String   @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id])
+}
+
+// --- CMS CONTENT ---
+
+model Blog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  slug      String   @unique
+  content   String
+  author    String
+  category  String
+  tags      String[]
+  images    String[]
+  thumbImg  String?
+  coverImg  String?
+  shortDesc String?
+  createdAt DateTime @default(now())
+}
+
+model Testimonial {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  role        String?  // e.g. "Customer", "CEO"
+  title       String?
+  avatar      String?
+  content     String   // description
+  rating      Int      @default(5)
+  images      String[]
+  address     String?
+  date        String?
+}
+
+model Banner {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  title          String?
+  subtitle       String?
+  image          String
+  link           String?
+  linkButtonText String? @default("Shop Now")
+  position       String
+}
+
+// --- COMMERCE FEATURES ---
+
+model Cart {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String?    @unique @db.ObjectId
+  user      User?      @relation(fields: [userId], references: [id])
+  
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  productId     String  @db.ObjectId
+  quantity      Int
+  selectedColor String?
+  selectedSize  String?
+  
+  cartId        String  @db.ObjectId
+  cart          Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+}
+
+model Wishlist {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @unique @db.ObjectId
+  user        User      @relation(fields: [userId], references: [id])
+  
+  productIDs  String[]  @db.ObjectId
+  products    Product[] @relation(fields: [productIDs], references: [id])
+}
+
+model CompareList {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @unique @db.ObjectId
+  user        User      @relation(fields: [userId], references: [id])
+  
+  productIDs  String[]  @db.ObjectId
+  products    Product[] @relation(fields: [productIDs], references: [id])
+}
+
+model Order {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber   String   @unique
+  userId        String?  @db.ObjectId
+  user          User?    @relation(fields: [userId], references: [id])
+  
+  // Storing items as JSON to take a snapshot of price/details at purchase time
+  items         Json
+  subtotal      Float
+  discount      Float    @default(0)
+  shippingCost  Float    @default(0)
+  tax           Float    @default(0)
+  total         Float
+  
+  couponId      String?  @db.ObjectId
+  couponCode    String?
+  
+  status        String   @default("pending") // pending, confirmed, processing, shipped, delivered, cancelled
+  paymentStatus String   @default("unpaid") // unpaid, paid, refunded, failed
+  paymentMethod String?
+  
+  // Shipping details stored as JSON
+  shippingAddress Json?
+  trackingNumber  String?
+  
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  payment       Payment?
+}
+
+// --- COUPONS ---
+
+model Coupon {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  code          String    @unique
+  description   String?
+  discountType  String    // "percentage" or "fixed"
+  discountValue Float
+  minOrderValue Float     @default(0)
+  maxDiscount   Float?    // Maximum discount for percentage coupons
+  maxUses       Int?
+  usedCount     Int       @default(0)
+  perUserLimit  Int       @default(1)
+  validFrom     DateTime  @default(now())
+  validUntil    DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  usages        CouponUsage[]
+}
+
+model CouponUsage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  couponId  String   @db.ObjectId
+  coupon    Coupon   @relation(fields: [couponId], references: [id])
+  userId    String   @db.ObjectId
+  orderId   String   @db.ObjectId
+  discount  Float
+  usedAt    DateTime @default(now())
+}
+
+// --- PAYMENTS ---
+
+model Payment {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderId           String   @unique @db.ObjectId
+  order             Order    @relation(fields: [orderId], references: [id])
+  
+  razorpayOrderId   String?  @unique
+  razorpayPaymentId String?  @unique
+  razorpaySignature String?
+  
+  amount            Float
+  currency          String   @default("INR")
+  status            String   @default("pending") // pending, completed, failed, refunded
+  method            String?  // card, upi, netbanking, wallet
+  
+  failureReason     String?
+  refundId          String?
+  refundAmount      Float?
+  
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// --- SHIPPING ---
+
+model ShippingZone {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  pincodes    String[] // Array of serviceable pincodes
+  baseCost    Float    // Base shipping cost
+  perKgCost   Float    @default(0) // Additional cost per kg
+  minDays     Int      @default(3) // Minimum delivery days
+  maxDays     Int      @default(7) // Maximum delivery days
+  freeAbove   Float?   // Free shipping above this order value
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
