@@ -13,10 +13,10 @@ interface Props {
     data: Array<ProductType>;
     productPerPage: number
     dataType: string | null
-    productStyle: string
+    productStyle?: string
 }
 
-const ShopFilterCanvas: React.FC<Props> = ({ data, productPerPage, dataType, productStyle }) => {
+const ShopFilterCanvas: React.FC<Props> = ({ data, productPerPage, dataType, productStyle = '' }) => {
     const [layoutCol, setLayoutCol] = useState<number | null>(4)
     const [showOnlySale, setShowOnlySale] = useState(false)
     const [sortOption, setSortOption] = useState('');

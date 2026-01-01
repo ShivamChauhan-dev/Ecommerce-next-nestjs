@@ -19,10 +19,10 @@ import Rate from '../Other/Rate'
 interface ProductProps {
     data: ProductType
     type: string
-    style: string
+    style?: string
 }
 
-const Product: React.FC<ProductProps> = ({ data, type, style }) => {
+const Product: React.FC<ProductProps> = ({ data, type, style = '' }) => {
     const [activeColor, setActiveColor] = useState<string>('')
     const [activeSize, setActiveSize] = useState<string>('')
     const [openQuickShop, setOpenQuickShop] = useState<boolean>(false)
